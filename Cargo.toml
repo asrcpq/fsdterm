@@ -1,0 +1,11 @@
+[package]
+name = "fsdterm"
+version = "0.1.0"
+authors = ["asrcpq <asrcpq@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nix = "0.17"
+sdl2 = "0.34"
+# mray = {git = "https://github.com/asrcpq/mray", rev = "c3b615c56545637e472a0f9594e1956929068dba"}
+mray = {path = "/home/asrcpq/git/asrcpq/mray"}
