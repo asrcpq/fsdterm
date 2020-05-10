@@ -48,7 +48,7 @@ fn openpty() -> Result<PTY, String> {
     use std::os::unix::io::IntoRawFd;
     Ok(PTY {
         master: master_fd.into_raw_fd(),
-        slave: slave_fd.into(),
+        slave: slave_fd,
     })
 }
 
@@ -62,8 +62,7 @@ pub struct Console {
 }
 
 impl Console {
-    pub fn new() -> Console {
-        let size = (80, 24);
+    pub fn new(size: (i32, i32)) -> Console {
         let font_size = (15, 20);
         Console {
             cursor: (0, 0),
@@ -89,6 +88,13 @@ impl Console {
             self.cursor.1 += 1;
         } else {
             self.scroll_up();
+            self.clear_line();
+        }
+    }
+
+    fn clear_line(&mut self) {
+        for x in 0..self.size.0 {
+            self.buffer[(x + self.cursor.1 * self.size.0) as usize] = 0;
         }
     }
 
@@ -102,12 +108,28 @@ impl Console {
         }
     }
 
-    pub fn put_char(&mut self, ch: u8) {
+    fn backspace(&mut self) {
+        if self.cursor.0 > 0 {
+            self.cursor.0 -= 1;
+        }
+        self.set_char(0);
+    }
+
+    fn set_char(&mut self, ch: u8) {
         if ch == b'\n' {
             self.cursor_newline();
             return;
         }
+        if ch == 8 {
+            println!("back");
+            self.backspace();
+            return;
+        }
         self.buffer[(self.cursor.0 + self.cursor.1 * self.size.0) as usize] = ch;
+    }
+
+    pub fn put_char(&mut self, ch: u8) {
+        self.set_char(ch);
         self.cursor_inc();
     }
 
@@ -135,15 +157,15 @@ impl Console {
 
 fn start(pty: &PTY) {
     match unistd::fork() {
-        Ok(unistd::ForkResult::Parent { child, .. }) => {
+        Ok(unistd::ForkResult::Parent { child: _, .. }) => {
             unistd::close(pty.slave).unwrap();
 
             let sdl_context = sdl2::init().unwrap();
             let video_subsystem = sdl_context.video().unwrap();
-            let WINDOW_SIZE: (u32, u32) = (1200, 480);
+            let window_size: (u32, u32) = (1200, 480);
 
             let window = video_subsystem
-                .window("eyhv", WINDOW_SIZE.0 as u32, WINDOW_SIZE.1 as u32)
+                .window("eyhv", window_size.0 as u32, window_size.1 as u32)
                 .opengl()
                 .position_centered()
                 .build()
@@ -159,21 +181,21 @@ fn start(pty: &PTY) {
             let mut texture = texture_creator
                 .create_texture_static(
                     Some(sdl2::pixels::PixelFormatEnum::RGB24),
-                    WINDOW_SIZE.0,
-                    WINDOW_SIZE.1,
+                    window_size.0,
+                    window_size.1,
                 )
                 .unwrap();
 
             let mut event_pump = sdl_context.event_pump().unwrap();
 
-            let mut console = Console::new();
+            let mut console = Console::new((80, 24));
 
             'main_loop: loop {
                 let mut readable = nix::sys::select::FdSet::new();
                 readable.insert(pty.master);
 
-                println!("wait...");
-                std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 120));
+                // println!("wait...");
+                std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 200));
 
                 use nix::sys::time::TimeValLike;
                 nix::sys::select::select(
@@ -191,12 +213,11 @@ fn start(pty: &PTY) {
                         eprintln!("Nothing to read from child: {}", e);
                         break;
                     }
-                    println!("buf: {:?}", buf);
                     console.put_char(buf[0]);
                     console.render();
 
                     texture
-                        .update(None, &console.canvas.data, WINDOW_SIZE.0 as usize * 3)
+                        .update(None, &console.canvas.data, window_size.0 as usize * 3)
                         .unwrap();
 
                     canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
@@ -237,11 +258,12 @@ fn start(pty: &PTY) {
                                 Some(Keycode::X) => b'x',
                                 Some(Keycode::Y) => b'y',
                                 Some(Keycode::Z) => b'z',
+                                Some(Keycode::Backspace) => 8,
                                 Some(Keycode::Space) => b' ',
                                 Some(Keycode::Return) => b'\n',
                                 _ => b'?',
                             };
-                            nix::unistd::write(pty.master, &mut [ch; 1]).unwrap();
+                            nix::unistd::write(pty.master, &[ch; 1]).unwrap();
                         }
                         _ => {}
                     }
@@ -251,23 +273,23 @@ fn start(pty: &PTY) {
             // nix::sys::wait::waitpid(child, None);
         }
         Ok(unistd::ForkResult::Child) => {
-            unistd::close(pty.master);
+            unistd::close(pty.master).unwrap();
 
             // create process group
-            unistd::setsid();
+            unistd::setsid().unwrap();
 
             const TIOCSCTTY: usize = 0x540E;
             nix::ioctl_write_int_bad!(tiocsctty, TIOCSCTTY);
-            unsafe { tiocsctty(pty.slave, 0) };
+            unsafe { tiocsctty(pty.slave, 0).unwrap() };
 
-            unistd::dup2(pty.slave, 0); // stdin
-            unistd::dup2(pty.slave, 1); // stdout
-            unistd::dup2(pty.slave, 2); // stderr
-            unistd::close(pty.slave);
+            unistd::dup2(pty.slave, 0).unwrap(); // stdin
+            unistd::dup2(pty.slave, 1).unwrap(); // stdout
+            unistd::dup2(pty.slave, 2).unwrap(); // stderr
+            unistd::close(pty.slave).unwrap();
 
             use std::ffi::CString;
             let path = CString::new("/bin/sh").unwrap();
-            unistd::execve(&path, &[], &[]);
+            unistd::execve(&path, &[], &[]).unwrap();
         }
         Err(_) => {}
     }
