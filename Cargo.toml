@@ -8,4 +8,4 @@ edition = "2018"
 nix = "0.17"
 sdl2 = "0.34"
 # mray = {git = "https://github.com/asrcpq/mray", rev = "c3b615c56545637e472a0f9594e1956929068dba"}
-mray = {path = "/home/asrcpq/git/asrcpq/mray"}
+mray = {git = "https://github.com/asrcpq/mray"}

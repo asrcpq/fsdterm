@@ -85,11 +85,27 @@ impl Console {
 
     fn cursor_newline(&mut self) {
         self.cursor.0 = 0;
-        self.cursor.1 += 1;
+        if self.cursor.1 < self.size.1 - 1 {
+            self.cursor.1 += 1;
+        } else {
+            self.scroll_up();
+        }
+    }
+
+    // does not move cursor
+    fn scroll_up(&mut self) {
+        for x in 0..self.size.0 {
+            for y in 0..self.size.1 - 1 {
+                self.buffer[(x + y * self.size.0) as usize]
+                    = self.buffer[(x + (y + 1) * self.size.0) as usize];
+            }
+        }
     }
 
     pub fn put_char(&mut self, ch: u8) {
         if ch == b'\n' {
+            self.cursor_newline();
+            return;
         }
         self.buffer[(self.cursor.0 + self.cursor.1 * self.size.0) as usize] = ch;
         self.cursor_inc();
