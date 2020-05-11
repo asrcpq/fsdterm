@@ -137,25 +137,28 @@ impl Console {
         if self.cursor.0 > 0 {
             self.cursor.0 -= 1;
         }
-        self.set_char(0);
+        self.set_char(0, false);
     }
 
-    fn set_char(&mut self, ch: u8) {
+    pub fn set_char(&mut self, ch: u8, cursor_inc: bool) {
         if ch == b'\n' {
             self.cursor_newline();
             return;
         }
         if ch == 8 {
+            // override cursor_inc
             println!("back");
             self.backspace();
             return;
         }
         self.buffer[(self.cursor.0 + self.cursor.1 * self.size.0) as usize] = ch;
+        if cursor_inc {
+            self.cursor_inc();
+        }
     }
 
     pub fn put_char(&mut self, ch: u8) {
-        self.set_char(ch);
-        self.cursor_inc();
+        self.set_char(ch, true);
     }
 
     pub fn render(&mut self) {
@@ -176,6 +179,18 @@ impl Console {
                     graphic_object.render(&mut self.canvas);
                 }
             }
+        }
+        // cursor render
+        let ch = b'|';
+        for graphic_object in
+            GraphicObjects::fsd(char::from(ch))
+                .zoom(self.scaler as f32)
+                .shift(Point2f::from_floats(
+                    (self.font_size.0 * self.cursor.0) as f32,
+                    (self.font_size.1 * self.cursor.1   ) as f32,
+                ))
+                .into_iter() {
+            graphic_object.render(&mut self.canvas);
         }
     }
 }
