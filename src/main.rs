@@ -145,6 +145,7 @@ impl Console {
     }
 
     pub fn set_char(&mut self, ch: u8, cursor_inc: bool) {
+        println!("{} {}", ch, cursor_inc);
         if ch == b'\n' {
             self.cursor_newline();
             return;
@@ -316,6 +317,10 @@ impl Console {
             return None;
         }
 
+        if ch == 13 {
+            self.set_char(ch, false);
+            return None;
+        }
         self.set_char(ch, true);
         None
     }
