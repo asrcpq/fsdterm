@@ -85,6 +85,7 @@ pub struct Console {
     scaler: f32,
     buffer: Vec<u8>,
     pub canvas: Canvas,
+    csi_buf: Vec<u8>,
 }
 
 impl Console {
@@ -97,6 +98,7 @@ impl Console {
             scaler: 20.,
             buffer: vec![0; (size.0 * size.1) as usize],
             canvas: Canvas::new((size.0 * font_size.0, size.1 * font_size.1)),
+            csi_buf: Vec::new(),
         }
     }
 
@@ -161,8 +163,109 @@ impl Console {
         }
     }
 
+    fn move_cursor(&mut self, x: i32, y: i32, abs: bool) {
+        if abs {
+            self.cursor.0 = x;
+            self.cursor.1 = y;
+        } else {
+            self.cursor.0 += x;
+            self.cursor.1 += y;
+            self.cursor.0 = self.cursor.0.min(self.size.0 - 1).max(0);
+            self.cursor.1 = self.cursor.1.min(self.size.1 - 1).max(0);
+        }
+    }
+
+    // match csi definition
+    fn erase_line(&mut self, param: i32) {
+        if param == 0 {
+            for i in self.cursor.0..self.size.0 {
+                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
+            }
+        } else if param == 1 {
+            for i in 0..=self.cursor.0 {
+                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
+            }
+        } else if param == 2 {
+            for i in 0..self.size.0 {
+                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
+            }
+        } else {
+            println!("Unsupported EL Param!")
+        }
+    }
+
+    fn proc_csi(&mut self) {
+        println!("{:?}", String::from_utf8(self.csi_buf.clone()).unwrap());
+        if self.csi_buf.is_empty() {
+            return;
+        }
+        if self.csi_buf[0] != 27 {
+            println!("csi_buf error");
+            return;
+        }
+        let mut param = Vec::new();
+        let mut final_byte = None;
+        for ch in self.csi_buf[1..].iter() {
+            match ch {
+                0x30..=0x3F => {
+                    param.push(*ch);
+                },
+                0x40..=0x7F => {
+                    final_byte = Some(ch);
+                }
+                _ => {}
+            }
+        }
+        match final_byte {
+            Some(b'D') => {
+                self.move_cursor(-String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), 0, false);
+            },
+            Some(b'C') => {
+                self.move_cursor(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), 0, false);
+            },
+            Some(b'A') => {
+                self.move_cursor(0, -String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), false);
+            },
+            Some(b'B') => {
+                self.move_cursor(0, String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), false);
+            },
+            Some(b'H') => {
+                // ansi coodinate is 1..=n, not 0..n
+                let params = String::from_utf8(param).unwrap().split(";").map(|x| x.parse::<i32>().unwrap_or(1) - 1).collect::<Vec<i32>>();
+                self.move_cursor(params[0], params[1], true);
+            }
+            Some(b'K') => {
+                self.erase_line(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
+            }
+            Some(x) => {
+                println!("Unimplemented final byte {}", x)
+            }
+            _ => {},
+        }
+        self.csi_buf.clear();
+    }
+
     pub fn put_char(&mut self, ch: u8) {
-        println!("{}", ch);
+        if ch == 27 {
+            //self.proc_csi();
+            self.csi_buf = vec![27];
+            return;
+        }
+
+        if !self.csi_buf.is_empty() {
+            if self.csi_buf.len() == 1 && ch == b'[' {
+                self.csi_buf.push(ch);
+                return;
+            }
+            if ch >= 0x40 && ch < 0x80 {
+                self.csi_buf.push(ch);
+                self.proc_csi();
+                return;
+            }
+            self.csi_buf.push(ch);
+            return;
+        }
+
         self.set_char(ch, true);
     }
 
@@ -191,7 +294,7 @@ impl Console {
                 .zoom(self.scaler as f32)
                 .shift(Point2f::from_floats(
                     (self.font_size.0 * self.cursor.0) as f32,
-                    (self.font_size.1 * self.cursor.1   ) as f32,
+                    (self.font_size.1 * self.cursor.1) as f32,
                 ))
                 .into_iter() {
             graphic_object.render(&mut self.canvas);
