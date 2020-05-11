@@ -39,6 +39,7 @@ fn set_shift(mut ch: u8, shift: bool) -> u8 {
         b'.' => b'>',
         b'/' => b'?',
         b'\\' => b'|',
+        b';' => b':',
         _ => ch,
     };
     ch
@@ -176,6 +177,31 @@ impl Console {
     }
 
     // match csi definition
+    fn erase_display(&mut self, param: i32) {
+        if param == 0 {
+            for x in 0..self.size.0 {
+                for y in self.cursor.1..self.size.1 {
+                    self.buffer[(x + y * self.size.0) as usize] = b' ';
+                }
+            }
+        } else if param == 1 {
+            for x in 0..self.size.0 {
+                for y in 0..=self.cursor.1 {
+                    self.buffer[(x + y * self.size.0) as usize] = b' ';
+                }
+            }
+        } else if param == 2 {
+            for x in 0..self.size.0 {
+                for y in 0..self.size.1 {
+                    self.buffer[(x + y * self.size.0) as usize] = b' ';
+                }
+            }
+        } else {
+            println!("Unsupported EL Param!")
+        }
+    }
+
+    // match csi definition
     fn erase_line(&mut self, param: i32) {
         if param == 0 {
             for i in self.cursor.0..self.size.0 {
@@ -194,14 +220,27 @@ impl Console {
         }
     }
 
-    fn proc_csi(&mut self) {
+    fn report_cursor(&self, param: i32) -> Option<Vec<u8>> {
+        if param != 6 {
+            println!("Error: only implemented report_cursor for final byte: n");
+            return None
+        }
+        let mut report = vec![27, b'['];
+        report.extend(self.cursor.1.to_string().into_bytes());
+        report.push(b';');
+        report.extend(self.cursor.0.to_string().into_bytes());
+        report.push(b'R');
+        Some(report)
+    }
+
+    fn proc_csi(&mut self) -> Option<Vec<u8>> {
         println!("{:?}", String::from_utf8(self.csi_buf.clone()).unwrap());
         if self.csi_buf.is_empty() {
-            return;
+            return None;
         }
         if self.csi_buf[0] != 27 {
             println!("csi_buf error");
-            return;
+            return None;
         }
         let mut param = Vec::new();
         let mut final_byte = None;
@@ -216,6 +255,7 @@ impl Console {
                 _ => {}
             }
         }
+        let mut report = None;
         match final_byte {
             Some(b'D') => {
                 self.move_cursor(-String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), 0, false);
@@ -233,40 +273,47 @@ impl Console {
                 // ansi coodinate is 1..=n, not 0..n
                 let params = String::from_utf8(param).unwrap().split(";").map(|x| x.parse::<i32>().unwrap_or(1) - 1).collect::<Vec<i32>>();
                 self.move_cursor(params[0], params[1], true);
-            }
+            },
+            Some(b'J') => {
+                self.erase_display(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
+            },
             Some(b'K') => {
                 self.erase_line(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
+            },
+            Some(b'n') => {
+                report = self.report_cursor(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
             }
             Some(x) => {
                 println!("Unimplemented final byte {}", x)
-            }
+            },
             _ => {},
         }
         self.csi_buf.clear();
+        report
     }
 
-    pub fn put_char(&mut self, ch: u8) {
+    pub fn put_char(&mut self, ch: u8) -> Option<Vec<u8>> {
         if ch == 27 {
             //self.proc_csi();
             self.csi_buf = vec![27];
-            return;
+            return None;
         }
 
         if !self.csi_buf.is_empty() {
             if self.csi_buf.len() == 1 && ch == b'[' {
                 self.csi_buf.push(ch);
-                return;
+                return None;
             }
             if ch >= 0x40 && ch < 0x80 {
                 self.csi_buf.push(ch);
-                self.proc_csi();
-                return;
+                return self.proc_csi()
             }
             self.csi_buf.push(ch);
-            return;
+            return None;
         }
 
         self.set_char(ch, true);
+        None
     }
 
     pub fn render(&mut self) {
@@ -363,7 +410,11 @@ fn start(pty: &PTY) {
                         eprintln!("Nothing to read from child: {}", e);
                         break;
                     }
-                    console.put_char(buf[0]);
+                    if let Some(report) = console.put_char(buf[0]) {
+                        for c in report.iter() {
+                            nix::unistd::write(pty.master, &[set_shift(*c, shift); 1]).unwrap();
+                        }
+                    }
                     console.render();
 
                     texture
