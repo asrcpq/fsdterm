@@ -18,6 +18,31 @@ use mray::algebra::Point2f;
 use mray::canvas::Canvas;
 use mray::graphic_object::GraphicObjects;
 
+fn set_shift(mut ch: u8, shift: bool) -> u8 {
+    if !shift {
+        return ch
+    }
+    ch = match ch {
+        b'a'..=b'z' => ch - b'a' + b'A',
+        b'1' => b'!',
+        b'2' => b'@',
+        b'3' => b'#',
+        b'4' => b'$',
+        b'5' => b'%',
+        b'6' => b'^',
+        b'7' => b'&',
+        b'8' => b'*',
+        b'9' => b'(',
+        b'0' => b')',
+        b'`' => b'~',
+        b',' => b'<',
+        b'.' => b'>',
+        b'/' => b'?',
+        _ => ch,
+    };
+    ch
+}
+
 fn find_sdl_gl_driver() -> Option<u32> {
     for (index, item) in sdl2::render::drivers().enumerate() {
         if item.name == "opengl" {
@@ -164,6 +189,8 @@ fn start(pty: &PTY) {
             let video_subsystem = sdl_context.video().unwrap();
             let window_size: (u32, u32) = (1200, 480);
 
+            let mut shift: bool = false;
+
             let window = video_subsystem
                 .window("eyhv", window_size.0 as u32, window_size.1 as u32)
                 .opengl()
@@ -195,7 +222,7 @@ fn start(pty: &PTY) {
                 readable.insert(pty.master);
 
                 // println!("wait...");
-                std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 200));
+                std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 500));
 
                 use nix::sys::time::TimeValLike;
                 nix::sys::select::select(
@@ -232,38 +259,70 @@ fn start(pty: &PTY) {
                         Event::Quit { .. } => break 'main_loop,
                         Event::KeyDown { keycode: code, .. } => {
                             let ch = match code {
-                                Some(Keycode::A) => b'a',
-                                Some(Keycode::B) => b'b',
-                                Some(Keycode::C) => b'c',
-                                Some(Keycode::D) => b'd',
-                                Some(Keycode::E) => b'e',
-                                Some(Keycode::F) => b'f',
-                                Some(Keycode::G) => b'g',
-                                Some(Keycode::H) => b'h',
-                                Some(Keycode::I) => b'i',
-                                Some(Keycode::J) => b'j',
-                                Some(Keycode::K) => b'k',
-                                Some(Keycode::L) => b'l',
-                                Some(Keycode::M) => b'm',
-                                Some(Keycode::N) => b'n',
-                                Some(Keycode::O) => b'o',
-                                Some(Keycode::P) => b'p',
-                                Some(Keycode::Q) => b'q',
-                                Some(Keycode::R) => b'r',
-                                Some(Keycode::S) => b's',
-                                Some(Keycode::T) => b't',
-                                Some(Keycode::U) => b'u',
-                                Some(Keycode::V) => b'v',
-                                Some(Keycode::W) => b'w',
-                                Some(Keycode::X) => b'x',
-                                Some(Keycode::Y) => b'y',
-                                Some(Keycode::Z) => b'z',
-                                Some(Keycode::Backspace) => 8,
-                                Some(Keycode::Space) => b' ',
-                                Some(Keycode::Return) => b'\n',
-                                _ => b'?',
+                                Some(Keycode::A) => Some(b'a'),
+                                Some(Keycode::B) => Some(b'b'),
+                                Some(Keycode::C) => Some(b'c'),
+                                Some(Keycode::D) => Some(b'd'),
+                                Some(Keycode::E) => Some(b'e'),
+                                Some(Keycode::F) => Some(b'f'),
+                                Some(Keycode::G) => Some(b'g'),
+                                Some(Keycode::H) => Some(b'h'),
+                                Some(Keycode::I) => Some(b'i'),
+                                Some(Keycode::J) => Some(b'j'),
+                                Some(Keycode::K) => Some(b'k'),
+                                Some(Keycode::L) => Some(b'l'),
+                                Some(Keycode::M) => Some(b'm'),
+                                Some(Keycode::N) => Some(b'n'),
+                                Some(Keycode::O) => Some(b'o'),
+                                Some(Keycode::P) => Some(b'p'),
+                                Some(Keycode::Q) => Some(b'q'),
+                                Some(Keycode::R) => Some(b'r'),
+                                Some(Keycode::S) => Some(b's'),
+                                Some(Keycode::T) => Some(b't'),
+                                Some(Keycode::U) => Some(b'u'),
+                                Some(Keycode::V) => Some(b'v'),
+                                Some(Keycode::W) => Some(b'w'),
+                                Some(Keycode::X) => Some(b'x'),
+                                Some(Keycode::Y) => Some(b'y'),
+                                Some(Keycode::Z) => Some(b'z'),
+                                Some(Keycode::Quote) => Some(b'\''),
+                                Some(Keycode::Comma) => Some(b','),
+                                Some(Keycode::Minus) => Some(b'-'),
+                                Some(Keycode::Period) => Some(b'.'),
+                                Some(Keycode::Slash) => Some(b'/'),
+                                Some(Keycode::Num0) => Some(b'0'),
+                                Some(Keycode::Num1) => Some(b'1'),
+                                Some(Keycode::Num2) => Some(b'2'),
+                                Some(Keycode::Num3) => Some(b'3'),
+                                Some(Keycode::Num4) => Some(b'4'),
+                                Some(Keycode::Num5) => Some(b'5'),
+                                Some(Keycode::Num6) => Some(b'6'),
+                                Some(Keycode::Num7) => Some(b'7'),
+                                Some(Keycode::Num8) => Some(b'8'),
+                                Some(Keycode::Num9) => Some(b'9'),
+                                Some(Keycode::Semicolon) => Some(b';'),
+                                Some(Keycode::Equals) => Some(b'='),
+                                Some(Keycode::Backslash) => Some(b'\\'),
+                                Some(Keycode::Backspace) => Some(8),
+                                Some(Keycode::Space) => Some(b' '),
+                                Some(Keycode::LShift) | Some(Keycode::RShift) => {
+                                    shift = true;
+                                    None
+                                }
+                                Some(Keycode::Return) => Some(b'\n'),
+                                _ => None,
                             };
-                            nix::unistd::write(pty.master, &[ch; 1]).unwrap();
+                            
+                            if let Some(ch) = ch {
+                                nix::unistd::write(pty.master, &[set_shift(ch, shift); 1]).unwrap();
+                            }
+                        }
+                        Event::KeyUp { keycode: code, .. } => {
+                            match code {
+                                Some(Keycode::LShift) | Some(Keycode::RShift) => 
+                                    shift = false,
+                                _ => {},
+                            };
                         }
                         _ => {}
                     }
@@ -288,7 +347,7 @@ fn start(pty: &PTY) {
             unistd::close(pty.slave).unwrap();
 
             use std::ffi::CString;
-            let path = CString::new("/bin/sh").unwrap();
+            let path = CString::new("/bin/bash").unwrap();
             unistd::execve(&path, &[], &[]).unwrap();
         }
         Err(_) => {}
