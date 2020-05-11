@@ -166,7 +166,6 @@ impl Console {
         for x in 0..self.size.0 {
             for y in 0..self.size.1 {
                 let ch = self.buffer[(x + y * self.size.0) as usize];
-                // println!("{}", ch);
                 for graphic_object in
                     GraphicObjects::fsd(char::from(ch))
                         .zoom(self.scaler as f32)
@@ -205,9 +204,10 @@ fn start(pty: &PTY) {
             let window_size: (u32, u32) = (1200, 480);
 
             let mut shift: bool = false;
+            let mut ctrl: bool = false;
 
             let window = video_subsystem
-                .window("eyhv", window_size.0 as u32, window_size.1 as u32)
+                .window("fsdterm", window_size.0 as u32, window_size.1 as u32)
                 .opengl()
                 .position_centered()
                 .build()
@@ -273,7 +273,7 @@ fn start(pty: &PTY) {
                     match event {
                         Event::Quit { .. } => break 'main_loop,
                         Event::KeyDown { keycode: code, .. } => {
-                            let ch = match code {
+                            let mut ch = match code {
                                 Some(Keycode::A) => Some(b'a'),
                                 Some(Keycode::B) => Some(b'b'),
                                 Some(Keycode::C) => Some(b'c'),
@@ -324,10 +324,20 @@ fn start(pty: &PTY) {
                                     shift = true;
                                     None
                                 }
+                                Some(Keycode::LCtrl) | Some(Keycode::RCtrl) => {
+                                    ctrl = true;
+                                    None
+                                }
                                 Some(Keycode::Return) => Some(b'\n'),
                                 _ => None,
                             };
                             
+                            if ctrl {
+                                ch = match ch {
+                                    Some(b'c') => Some(3),
+                                    _ => None,
+                                }
+                            }
                             if let Some(ch) = ch {
                                 nix::unistd::write(pty.master, &[set_shift(ch, shift); 1]).unwrap();
                             }
@@ -336,6 +346,8 @@ fn start(pty: &PTY) {
                             match code {
                                 Some(Keycode::LShift) | Some(Keycode::RShift) => 
                                     shift = false,
+                                Some(Keycode::LCtrl) | Some(Keycode::RCtrl) =>
+                                    ctrl = false,
                                 _ => {},
                             };
                         }
