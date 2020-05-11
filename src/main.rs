@@ -171,9 +171,9 @@ impl Console {
         } else {
             self.cursor.0 += x;
             self.cursor.1 += y;
-            self.cursor.0 = self.cursor.0.min(self.size.0 - 1).max(0);
-            self.cursor.1 = self.cursor.1.min(self.size.1 - 1).max(0);
         }
+        self.cursor.0 = self.cursor.0.min(self.size.0 - 1).max(0);
+        self.cursor.1 = self.cursor.1.min(self.size.1 - 1).max(0);
     }
 
     // match csi definition
@@ -272,7 +272,11 @@ impl Console {
             Some(b'H') => {
                 // ansi coodinate is 1..=n, not 0..n
                 let params = String::from_utf8(param).unwrap().split(";").map(|x| x.parse::<i32>().unwrap_or(1) - 1).collect::<Vec<i32>>();
-                self.move_cursor(params[0], params[1], true);
+                if params.len() == 1 {
+                    self.move_cursor(1, 1, true);
+                } else {
+                    self.move_cursor(params[1], params[0], true);
+                }
             },
             Some(b'J') => {
                 self.erase_display(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
@@ -478,6 +482,7 @@ fn start(pty: &PTY) {
                                 Some(Keycode::Equals) => Some(vec![b'=']),
                                 Some(Keycode::Backslash) => Some(vec![b'\\']),
                                 Some(Keycode::Backspace) => Some(vec![8, b' ', 8]),
+                                Some(Keycode::Escape) => Some(vec![27]),
                                 Some(Keycode::Space) => Some(vec![b' ']),
                                 Some(Keycode::LShift) | Some(Keycode::RShift) => {
                                     shift = true;
