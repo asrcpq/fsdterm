@@ -38,6 +38,7 @@ fn set_shift(mut ch: u8, shift: bool) -> u8 {
         b',' => b'<',
         b'.' => b'>',
         b'/' => b'?',
+        b'\\' => b'|',
         _ => ch,
     };
     ch
@@ -133,11 +134,11 @@ impl Console {
         }
     }
 
+    // not set char
     fn backspace(&mut self) {
         if self.cursor.0 > 0 {
             self.cursor.0 -= 1;
         }
-        self.set_char(0, false);
     }
 
     pub fn set_char(&mut self, ch: u8, cursor_inc: bool) {
@@ -145,9 +146,12 @@ impl Console {
             self.cursor_newline();
             return;
         }
+        if ch == 7 {
+            println!("beep!");
+            return;
+        }
         if ch == 8 {
             // override cursor_inc
-            println!("back");
             self.backspace();
             return;
         }
@@ -158,6 +162,7 @@ impl Console {
     }
 
     pub fn put_char(&mut self, ch: u8) {
+        println!("{}", ch);
         self.set_char(ch, true);
     }
 
@@ -274,52 +279,52 @@ fn start(pty: &PTY) {
                         Event::Quit { .. } => break 'main_loop,
                         Event::KeyDown { keycode: code, .. } => {
                             let mut ch = match code {
-                                Some(Keycode::A) => Some(b'a'),
-                                Some(Keycode::B) => Some(b'b'),
-                                Some(Keycode::C) => Some(b'c'),
-                                Some(Keycode::D) => Some(b'd'),
-                                Some(Keycode::E) => Some(b'e'),
-                                Some(Keycode::F) => Some(b'f'),
-                                Some(Keycode::G) => Some(b'g'),
-                                Some(Keycode::H) => Some(b'h'),
-                                Some(Keycode::I) => Some(b'i'),
-                                Some(Keycode::J) => Some(b'j'),
-                                Some(Keycode::K) => Some(b'k'),
-                                Some(Keycode::L) => Some(b'l'),
-                                Some(Keycode::M) => Some(b'm'),
-                                Some(Keycode::N) => Some(b'n'),
-                                Some(Keycode::O) => Some(b'o'),
-                                Some(Keycode::P) => Some(b'p'),
-                                Some(Keycode::Q) => Some(b'q'),
-                                Some(Keycode::R) => Some(b'r'),
-                                Some(Keycode::S) => Some(b's'),
-                                Some(Keycode::T) => Some(b't'),
-                                Some(Keycode::U) => Some(b'u'),
-                                Some(Keycode::V) => Some(b'v'),
-                                Some(Keycode::W) => Some(b'w'),
-                                Some(Keycode::X) => Some(b'x'),
-                                Some(Keycode::Y) => Some(b'y'),
-                                Some(Keycode::Z) => Some(b'z'),
-                                Some(Keycode::Quote) => Some(b'\''),
-                                Some(Keycode::Comma) => Some(b','),
-                                Some(Keycode::Minus) => Some(b'-'),
-                                Some(Keycode::Period) => Some(b'.'),
-                                Some(Keycode::Slash) => Some(b'/'),
-                                Some(Keycode::Num0) => Some(b'0'),
-                                Some(Keycode::Num1) => Some(b'1'),
-                                Some(Keycode::Num2) => Some(b'2'),
-                                Some(Keycode::Num3) => Some(b'3'),
-                                Some(Keycode::Num4) => Some(b'4'),
-                                Some(Keycode::Num5) => Some(b'5'),
-                                Some(Keycode::Num6) => Some(b'6'),
-                                Some(Keycode::Num7) => Some(b'7'),
-                                Some(Keycode::Num8) => Some(b'8'),
-                                Some(Keycode::Num9) => Some(b'9'),
-                                Some(Keycode::Semicolon) => Some(b';'),
-                                Some(Keycode::Equals) => Some(b'='),
-                                Some(Keycode::Backslash) => Some(b'\\'),
-                                Some(Keycode::Backspace) => Some(8),
-                                Some(Keycode::Space) => Some(b' '),
+                                Some(Keycode::A) => Some(vec![b'a']),
+                                Some(Keycode::B) => Some(vec![b'b']),
+                                Some(Keycode::C) => Some(vec![b'c']),
+                                Some(Keycode::D) => Some(vec![b'd']),
+                                Some(Keycode::E) => Some(vec![b'e']),
+                                Some(Keycode::F) => Some(vec![b'f']),
+                                Some(Keycode::G) => Some(vec![b'g']),
+                                Some(Keycode::H) => Some(vec![b'h']),
+                                Some(Keycode::I) => Some(vec![b'i']),
+                                Some(Keycode::J) => Some(vec![b'j']),
+                                Some(Keycode::K) => Some(vec![b'k']),
+                                Some(Keycode::L) => Some(vec![b'l']),
+                                Some(Keycode::M) => Some(vec![b'm']),
+                                Some(Keycode::N) => Some(vec![b'n']),
+                                Some(Keycode::O) => Some(vec![b'o']),
+                                Some(Keycode::P) => Some(vec![b'p']),
+                                Some(Keycode::Q) => Some(vec![b'q']),
+                                Some(Keycode::R) => Some(vec![b'r']),
+                                Some(Keycode::S) => Some(vec![b's']),
+                                Some(Keycode::T) => Some(vec![b't']),
+                                Some(Keycode::U) => Some(vec![b'u']),
+                                Some(Keycode::V) => Some(vec![b'v']),
+                                Some(Keycode::W) => Some(vec![b'w']),
+                                Some(Keycode::X) => Some(vec![b'x']),
+                                Some(Keycode::Y) => Some(vec![b'y']),
+                                Some(Keycode::Z) => Some(vec![b'z']),
+                                Some(Keycode::Quote) => Some(vec![b'\'']),
+                                Some(Keycode::Comma) => Some(vec![b',']),
+                                Some(Keycode::Minus) => Some(vec![b'-']),
+                                Some(Keycode::Period) => Some(vec![b'.']),
+                                Some(Keycode::Slash) => Some(vec![b'/']),
+                                Some(Keycode::Num0) => Some(vec![b'0']),
+                                Some(Keycode::Num1) => Some(vec![b'1']),
+                                Some(Keycode::Num2) => Some(vec![b'2']),
+                                Some(Keycode::Num3) => Some(vec![b'3']),
+                                Some(Keycode::Num4) => Some(vec![b'4']),
+                                Some(Keycode::Num5) => Some(vec![b'5']),
+                                Some(Keycode::Num6) => Some(vec![b'6']),
+                                Some(Keycode::Num7) => Some(vec![b'7']),
+                                Some(Keycode::Num8) => Some(vec![b'8']),
+                                Some(Keycode::Num9) => Some(vec![b'9']),
+                                Some(Keycode::Semicolon) => Some(vec![b';']),
+                                Some(Keycode::Equals) => Some(vec![b'=']),
+                                Some(Keycode::Backslash) => Some(vec![b'\\']),
+                                Some(Keycode::Backspace) => Some(vec![8, b' ', 8]),
+                                Some(Keycode::Space) => Some(vec![b' ']),
                                 Some(Keycode::LShift) | Some(Keycode::RShift) => {
                                     shift = true;
                                     None
@@ -328,18 +333,33 @@ fn start(pty: &PTY) {
                                     ctrl = true;
                                     None
                                 }
-                                Some(Keycode::Return) => Some(b'\n'),
+                                Some(Keycode::Return) => Some(vec![b'\n']),
+                                Some(Keycode::Left) => {
+                                    Some(vec![27, b'O', b'D'])
+                                },
+                                Some(Keycode::Right) => {
+                                    Some(vec![27, b'O', b'C'])
+                                },
+                                Some(Keycode::Down) => {
+                                    Some(vec![27, b'O', b'B'])
+                                },
+                                Some(Keycode::Up) => {
+                                    Some(vec![27, b'O', b'A'])
+                                },
                                 _ => None,
                             };
                             
                             if ctrl {
-                                ch = match ch {
-                                    Some(b'c') => Some(3),
-                                    _ => None,
+                                if let Some(c) = ch.clone() {
+                                    if c[0] == b'c' {
+                                        ch = Some(vec![3]);
+                                    }
                                 }
                             }
                             if let Some(ch) = ch {
-                                nix::unistd::write(pty.master, &[set_shift(ch, shift); 1]).unwrap();
+                                for c in ch.iter() {
+                                    nix::unistd::write(pty.master, &[set_shift(*c, shift); 1]).unwrap();
+                                }
                             }
                         }
                         Event::KeyUp { keycode: code, .. } => {
