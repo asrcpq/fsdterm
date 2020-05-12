@@ -144,7 +144,6 @@ impl Console {
     }
 
     pub fn set_char(&mut self, ch: u8, cursor_inc: bool) {
-        println!("{} {}", ch, cursor_inc);
         if ch == b'\n' {
             self.cursor_newline();
             return;
@@ -234,7 +233,6 @@ impl Console {
     }
 
     fn proc_csi(&mut self) -> Option<Vec<u8>> {
-        println!("{:?}", String::from_utf8(self.csi_buf.clone()).unwrap());
         if self.csi_buf.is_empty() {
             return None;
         }
@@ -288,7 +286,7 @@ impl Console {
                 report = self.report_cursor(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
             }
             Some(x) => {
-                println!("Unimplemented final byte {}", x)
+                println!("Unimplemented final byte {:?}", self.csi_buf)
             },
             _ => {},
         }
@@ -396,44 +394,47 @@ fn start(pty: &PTY) {
             let mut console = Console::new((80, 24));
 
             'main_loop: loop {
-                let mut readable = nix::sys::select::FdSet::new();
-                readable.insert(pty.master);
-
                 // println!("wait...");
-                std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 500));
+                std::thread::sleep(std::time::Duration::new(0, 1_000_000u32));
+                'readable_pts: loop {
+                    let mut readable = nix::sys::select::FdSet::new();
+                    readable.insert(pty.master);
 
-                use nix::sys::time::TimeValLike;
-                nix::sys::select::select(
-                    None,
-                    Some(&mut readable),                        // read
-                    None,                                       // write
-                    None,                                       // error
-                    Some(&mut nix::sys::time::TimeVal::zero()), // polling
-                )
-                .unwrap();
+                    use nix::sys::time::TimeValLike;
+                    nix::sys::select::select(
+                        None,
+                        Some(&mut readable),                        // read
+                        None,                                       // write
+                        None,                                       // error
+                        Some(&mut nix::sys::time::TimeVal::zero()), // polling
+                    )
+                    .unwrap();
 
-                if readable.contains(pty.master) {
-                    let mut buf = [0];
-                    if let Err(e) = nix::unistd::read(pty.master, &mut buf) {
-                        eprintln!("Nothing to read from child: {}", e);
-                        break;
-                    }
-                    if let Some(report) = console.put_char(buf[0]) {
-                        for c in report.iter() {
-                            nix::unistd::write(pty.master, &[set_shift(*c, shift); 1]).unwrap();
+                    if readable.contains(pty.master) {
+                        let mut buf = [0];
+                        if let Err(e) = nix::unistd::read(pty.master, &mut buf) {
+                            eprintln!("Nothing to read from child: {}", e);
+                            break 'main_loop;
                         }
+                        if let Some(report) = console.put_char(buf[0]) {
+                            for c in report.iter() {
+                                nix::unistd::write(pty.master, &[set_shift(*c, shift); 1]).unwrap();
+                            }
+                        }
+                    } else {
+                        break 'readable_pts;
                     }
-                    console.render();
-
-                    texture
-                        .update(None, &console.canvas.data, window_size.0 as usize * 3)
-                        .unwrap();
-
-                    canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
-                    canvas.clear();
-                    canvas.copy(&texture, None, None).unwrap();
-                    canvas.present();
                 }
+                console.render();
+
+                texture
+                    .update(None, &console.canvas.data, window_size.0 as usize * 3)
+                    .unwrap();
+
+                canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
+                canvas.clear();
+                canvas.copy(&texture, None, None).unwrap();
+                canvas.present();
 
                 // read input
                 for event in event_pump.poll_iter() {
