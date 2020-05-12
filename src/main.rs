@@ -19,7 +19,7 @@ use mray::canvas::Canvas;
 
 fn set_shift(mut ch: u8, shift: bool) -> u8 {
     if !shift {
-        return ch
+        return ch;
     }
     ch = match ch {
         b'a'..=b'z' => ch - b'a' + b'A',
@@ -37,6 +37,8 @@ fn set_shift(mut ch: u8, shift: bool) -> u8 {
         b',' => b'<',
         b'.' => b'>',
         b'/' => b'?',
+        b'[' => b'{',
+        b']' => b'}',
         b'\\' => b'|',
         b';' => b':',
         _ => ch,
@@ -130,8 +132,8 @@ impl Console {
     fn scroll_up(&mut self) {
         for x in 0..self.size.0 {
             for y in 0..self.size.1 - 1 {
-                self.buffer[(x + y * self.size.0) as usize]
-                    = self.buffer[(x + (y + 1) * self.size.0) as usize];
+                self.buffer[(x + y * self.size.0) as usize] =
+                    self.buffer[(x + (y + 1) * self.size.0) as usize];
             }
         }
     }
@@ -222,7 +224,7 @@ impl Console {
     fn report_cursor(&self, param: i32) -> Option<Vec<u8>> {
         if param != 6 {
             println!("Error: only implemented report_cursor for final byte: n");
-            return None
+            return None;
         }
         let mut report = vec![27, b'['];
         report.extend(self.cursor.1.to_string().into_bytes());
@@ -246,7 +248,7 @@ impl Console {
             match ch {
                 0x30..=0x3F => {
                     param.push(*ch);
-                },
+                }
                 0x40..=0x7F => {
                     final_byte = Some(ch);
                 }
@@ -256,39 +258,89 @@ impl Console {
         let mut report = None;
         match final_byte {
             Some(b'D') => {
-                self.move_cursor(-String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), 0, false);
-            },
+                self.move_cursor(
+                    -String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(1),
+                    0,
+                    false,
+                );
+            }
             Some(b'C') => {
-                self.move_cursor(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), 0, false);
-            },
+                self.move_cursor(
+                    String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(1),
+                    0,
+                    false,
+                );
+            }
             Some(b'A') => {
-                self.move_cursor(0, -String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), false);
-            },
+                self.move_cursor(
+                    0,
+                    -String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(1),
+                    false,
+                );
+            }
             Some(b'B') => {
-                self.move_cursor(0, String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(1), false);
-            },
+                self.move_cursor(
+                    0,
+                    String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(1),
+                    false,
+                );
+            }
             Some(b'H') => {
                 // ansi coodinate is 1..=n, not 0..n
-                let params = String::from_utf8(param).unwrap().split(";").map(|x| x.parse::<i32>().unwrap_or(1) - 1).collect::<Vec<i32>>();
+                let params = String::from_utf8(param)
+                    .unwrap()
+                    .split(";")
+                    .map(|x| x.parse::<i32>().unwrap_or(1) - 1)
+                    .collect::<Vec<i32>>();
                 if params.len() == 1 {
                     self.move_cursor(1, 1, true);
                 } else {
                     self.move_cursor(params[1], params[0], true);
                 }
-            },
-            Some(b'J') => {
-                self.erase_display(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
-            },
-            Some(b'K') => {
-                self.erase_line(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
-            },
-            Some(b'n') => {
-                report = self.report_cursor(String::from_utf8(param).unwrap().parse::<i32>().unwrap_or(0));
             }
-            Some(x) => {
-                println!("Unimplemented final byte {:?}", self.csi_buf)
-            },
-            _ => {},
+            Some(b'J') => {
+                self.erase_display(
+                    String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(0),
+                );
+            }
+            Some(b'K') => {
+                self.erase_line(
+                    String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(0),
+                );
+            }
+            Some(b'n') => {
+                report = self.report_cursor(
+                    String::from_utf8(param)
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap_or(0),
+                );
+            }
+            Some(_) => {
+                println!(
+                    "Unimplemented final byte {:?}",
+                    String::from_utf8(self.csi_buf.clone()).unwrap()
+                );
+            }
+            _ => {}
         }
         self.csi_buf.clear();
         report
@@ -308,7 +360,7 @@ impl Console {
             }
             if ch >= 0x40 && ch < 0x80 {
                 self.csi_buf.push(ch);
-                return self.proc_csi()
+                return self.proc_csi();
             }
             self.csi_buf.push(ch);
             return None;
@@ -327,14 +379,13 @@ impl Console {
         for x in 0..self.size.0 {
             for y in 0..self.size.1 {
                 let ch = self.buffer[(x + y * self.size.0) as usize];
-                for graphic_object in
-                    mray::fsd::fsd(char::from(ch))
-                        .zoom(self.scaler as f32)
-                        .shift(Point2f::from_floats(
-                            (self.font_size.0 * x) as f32,
-                            (self.font_size.1 * y) as f32,
-                        ))
-                        .into_iter()
+                for graphic_object in mray::fsd::fsd(char::from(ch))
+                    .zoom(self.scaler as f32)
+                    .shift(Point2f::from_floats(
+                        (self.font_size.0 * x) as f32,
+                        (self.font_size.1 * y) as f32,
+                    ))
+                    .into_iter()
                 {
                     graphic_object.render(&mut self.canvas);
                 }
@@ -342,14 +393,14 @@ impl Console {
         }
         // cursor render
         let ch = b'|';
-        for graphic_object in
-            mray::fsd::fsd(char::from(ch))
-                .zoom(self.scaler as f32)
-                .shift(Point2f::from_floats(
-                    (self.font_size.0 * self.cursor.0) as f32,
-                    (self.font_size.1 * self.cursor.1) as f32,
-                ))
-                .into_iter() {
+        for graphic_object in mray::fsd::fsd(char::from(ch))
+            .zoom(self.scaler as f32)
+            .shift(Point2f::from_floats(
+                (self.font_size.0 * self.cursor.0) as f32,
+                (self.font_size.1 * self.cursor.1) as f32,
+            ))
+            .into_iter()
+        {
             graphic_object.render(&mut self.canvas);
         }
     }
@@ -485,7 +536,10 @@ fn start(pty: &PTY) {
                                 Some(Keycode::Num9) => Some(vec![b'9']),
                                 Some(Keycode::Semicolon) => Some(vec![b';']),
                                 Some(Keycode::Equals) => Some(vec![b'=']),
+                                Some(Keycode::LeftBracket) => Some(vec![b'[']),
+                                Some(Keycode::RightBracket) => Some(vec![b']']),
                                 Some(Keycode::Backslash) => Some(vec![b'\\']),
+                                Some(Keycode::Backquote) => Some(vec![b'`']),
                                 Some(Keycode::Backspace) => Some(vec![8, b' ', 8]),
                                 Some(Keycode::Escape) => Some(vec![27]),
                                 Some(Keycode::Space) => Some(vec![b' ']),
@@ -498,41 +552,35 @@ fn start(pty: &PTY) {
                                     None
                                 }
                                 Some(Keycode::Return) => Some(vec![b'\n']),
-                                Some(Keycode::Left) => {
-                                    Some(vec![27, b'O', b'D'])
-                                },
-                                Some(Keycode::Right) => {
-                                    Some(vec![27, b'O', b'C'])
-                                },
-                                Some(Keycode::Down) => {
-                                    Some(vec![27, b'O', b'B'])
-                                },
-                                Some(Keycode::Up) => {
-                                    Some(vec![27, b'O', b'A'])
-                                },
+                                Some(Keycode::Left) => Some(vec![27, b'O', b'D']),
+                                Some(Keycode::Right) => Some(vec![27, b'O', b'C']),
+                                Some(Keycode::Down) => Some(vec![27, b'O', b'B']),
+                                Some(Keycode::Up) => Some(vec![27, b'O', b'A']),
                                 _ => None,
                             };
-                            
+
                             if ctrl {
                                 if let Some(c) = ch.clone() {
-                                    if c[0] == b'c' {
-                                        ch = Some(vec![3]);
+                                    ch = match c[0] {
+                                        b'a'..=b'z' => {
+                                            Some(vec![c[0] - b'a' + 1])
+                                        },
+                                        _ => Some(vec![c[0]]),
                                     }
                                 }
                             }
                             if let Some(ch) = ch {
                                 for c in ch.iter() {
-                                    nix::unistd::write(pty.master, &[set_shift(*c, shift); 1]).unwrap();
+                                    nix::unistd::write(pty.master, &[set_shift(*c, shift); 1])
+                                        .unwrap();
                                 }
                             }
                         }
                         Event::KeyUp { keycode: code, .. } => {
                             match code {
-                                Some(Keycode::LShift) | Some(Keycode::RShift) => 
-                                    shift = false,
-                                Some(Keycode::LCtrl) | Some(Keycode::RCtrl) =>
-                                    ctrl = false,
-                                _ => {},
+                                Some(Keycode::LShift) | Some(Keycode::RShift) => shift = false,
+                                Some(Keycode::LCtrl) | Some(Keycode::RCtrl) => ctrl = false,
+                                _ => {}
                             };
                         }
                         _ => {}
