@@ -1,21 +1,22 @@
+mod console;
+mod screen_buffer;
+
 extern crate mray;
 extern crate nix;
 extern crate sdl2;
+
+use console::Console;
 
 use nix::fcntl::{open, OFlag};
 use nix::pty::{grantpt, posix_openpt, ptsname, unlockpt};
 use nix::sys::stat::Mode;
 use nix::unistd;
-
-use std::os::unix::io::RawFd;
-use std::path::Path;
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 
-use mray::algebra::Point2f;
-use mray::canvas::Canvas;
+use std::os::unix::io::RawFd;
+use std::path::Path;
 
 fn set_shift(mut ch: u8, shift: bool) -> u8 {
     if !shift {
@@ -80,333 +81,10 @@ fn openpty() -> Result<PTY, String> {
     })
 }
 
-pub struct Console {
-    cursor: (i32, i32),
-    size: (i32, i32),
-    font_size: (i32, i32),
-    scaler: f32,
-    buffer: Vec<u8>,
-    pub canvas: Canvas,
-    csi_buf: Vec<u8>,
-}
-
-impl Console {
-    pub fn new(size: (i32, i32)) -> Console {
-        let font_size = (15, 20);
-        Console {
-            cursor: (0, 0),
-            size,
-            font_size,
-            scaler: 20.,
-            buffer: vec![0; (size.0 * size.1) as usize],
-            canvas: Canvas::new((size.0 * font_size.0, size.1 * font_size.1)),
-            csi_buf: Vec::new(),
-        }
-    }
-
-    fn cursor_inc(&mut self) {
-        if self.cursor.0 < self.size.0 - 1 {
-            self.cursor.0 += 1;
-        } else {
-            self.cursor_newline();
-        }
-    }
-
-    fn cursor_newline(&mut self) {
-        self.cursor.0 = 0;
-        if self.cursor.1 < self.size.1 - 1 {
-            self.cursor.1 += 1;
-        } else {
-            self.scroll_up();
-            self.clear_line();
-        }
-    }
-
-    fn clear_line(&mut self) {
-        for x in 0..self.size.0 {
-            self.buffer[(x + self.cursor.1 * self.size.0) as usize] = 0;
-        }
-    }
-
-    // does not move cursor
-    fn scroll_up(&mut self) {
-        for x in 0..self.size.0 {
-            for y in 0..self.size.1 - 1 {
-                self.buffer[(x + y * self.size.0) as usize] =
-                    self.buffer[(x + (y + 1) * self.size.0) as usize];
-            }
-        }
-    }
-
-    // not set char
-    fn backspace(&mut self) {
-        if self.cursor.0 > 0 {
-            self.cursor.0 -= 1;
-        }
-    }
-
-    pub fn set_char(&mut self, ch: u8, cursor_inc: bool) {
-        if ch == b'\n' {
-            self.cursor_newline();
-            return;
-        }
-        if ch == 7 {
-            println!("beep!");
-            return;
-        }
-        if ch == 8 {
-            // override cursor_inc
-            self.backspace();
-            return;
-        }
-        self.buffer[(self.cursor.0 + self.cursor.1 * self.size.0) as usize] = ch;
-        if cursor_inc {
-            self.cursor_inc();
-        }
-    }
-
-    fn move_cursor(&mut self, x: i32, y: i32, abs: bool) {
-        if abs {
-            self.cursor.0 = x;
-            self.cursor.1 = y;
-        } else {
-            self.cursor.0 += x;
-            self.cursor.1 += y;
-        }
-        self.cursor.0 = self.cursor.0.min(self.size.0 - 1).max(0);
-        self.cursor.1 = self.cursor.1.min(self.size.1 - 1).max(0);
-    }
-
-    // match csi definition
-    fn erase_display(&mut self, param: i32) {
-        if param == 0 {
-            for x in 0..self.size.0 {
-                for y in self.cursor.1..self.size.1 {
-                    self.buffer[(x + y * self.size.0) as usize] = b' ';
-                }
-            }
-        } else if param == 1 {
-            for x in 0..self.size.0 {
-                for y in 0..=self.cursor.1 {
-                    self.buffer[(x + y * self.size.0) as usize] = b' ';
-                }
-            }
-        } else if param == 2 {
-            for x in 0..self.size.0 {
-                for y in 0..self.size.1 {
-                    self.buffer[(x + y * self.size.0) as usize] = b' ';
-                }
-            }
-        } else {
-            println!("Unsupported EL Param!")
-        }
-    }
-
-    // match csi definition
-    fn erase_line(&mut self, param: i32) {
-        if param == 0 {
-            for i in self.cursor.0..self.size.0 {
-                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
-            }
-        } else if param == 1 {
-            for i in 0..=self.cursor.0 {
-                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
-            }
-        } else if param == 2 {
-            for i in 0..self.size.0 {
-                self.buffer[(i + self.cursor.1 * self.size.0) as usize] = b' ';
-            }
-        } else {
-            println!("Unsupported EL Param!")
-        }
-    }
-
-    fn report_cursor(&self, param: i32) -> Option<Vec<u8>> {
-        if param != 6 {
-            println!("Error: only implemented report_cursor for final byte: n");
-            return None;
-        }
-        let mut report = vec![27, b'['];
-        report.extend(self.cursor.1.to_string().into_bytes());
-        report.push(b';');
-        report.extend(self.cursor.0.to_string().into_bytes());
-        report.push(b'R');
-        Some(report)
-    }
-
-    fn proc_csi(&mut self) -> Option<Vec<u8>> {
-        if self.csi_buf.is_empty() {
-            return None;
-        }
-        if self.csi_buf[0] != 27 {
-            println!("csi_buf error");
-            return None;
-        }
-        let mut param = Vec::new();
-        let mut final_byte = None;
-        for ch in self.csi_buf[1..].iter() {
-            match ch {
-                0x30..=0x3F => {
-                    param.push(*ch);
-                }
-                0x40..=0x7F => {
-                    final_byte = Some(ch);
-                }
-                _ => {}
-            }
-        }
-        let mut report = None;
-        match final_byte {
-            Some(b'D') => {
-                self.move_cursor(
-                    -String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(1),
-                    0,
-                    false,
-                );
-            }
-            Some(b'C') => {
-                self.move_cursor(
-                    String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(1),
-                    0,
-                    false,
-                );
-            }
-            Some(b'A') => {
-                self.move_cursor(
-                    0,
-                    -String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(1),
-                    false,
-                );
-            }
-            Some(b'B') => {
-                self.move_cursor(
-                    0,
-                    String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(1),
-                    false,
-                );
-            }
-            Some(b'H') => {
-                // ansi coodinate is 1..=n, not 0..n
-                let params = String::from_utf8(param)
-                    .unwrap()
-                    .split(";")
-                    .map(|x| x.parse::<i32>().unwrap_or(1) - 1)
-                    .collect::<Vec<i32>>();
-                if params.len() == 1 {
-                    self.move_cursor(1, 1, true);
-                } else {
-                    self.move_cursor(params[1], params[0], true);
-                }
-            }
-            Some(b'J') => {
-                self.erase_display(
-                    String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(0),
-                );
-            }
-            Some(b'K') => {
-                self.erase_line(
-                    String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(0),
-                );
-            }
-            Some(b'n') => {
-                report = self.report_cursor(
-                    String::from_utf8(param)
-                        .unwrap()
-                        .parse::<i32>()
-                        .unwrap_or(0),
-                );
-            }
-            Some(_) => {
-                println!(
-                    "Unimplemented final byte {:?}",
-                    String::from_utf8(self.csi_buf.clone()).unwrap()
-                );
-            }
-            _ => {}
-        }
-        self.csi_buf.clear();
-        report
-    }
-
-    pub fn put_char(&mut self, ch: u8) -> Option<Vec<u8>> {
-        if ch == 27 {
-            //self.proc_csi();
-            self.csi_buf = vec![27];
-            return None;
-        }
-
-        if !self.csi_buf.is_empty() {
-            if self.csi_buf.len() == 1 && ch == b'[' {
-                self.csi_buf.push(ch);
-                return None;
-            }
-            if ch >= 0x40 && ch < 0x80 {
-                self.csi_buf.push(ch);
-                return self.proc_csi();
-            }
-            self.csi_buf.push(ch);
-            return None;
-        }
-
-        if ch == 13 {
-            self.set_char(ch, false);
-            return None;
-        }
-        self.set_char(ch, true);
-        None
-    }
-
-    pub fn render(&mut self) {
-        self.canvas.flush();
-        for x in 0..self.size.0 {
-            for y in 0..self.size.1 {
-                let ch = self.buffer[(x + y * self.size.0) as usize];
-                for graphic_object in mray::fsd::fsd(char::from(ch))
-                    .zoom(self.scaler as f32)
-                    .shift(Point2f::from_floats(
-                        (self.font_size.0 * x) as f32,
-                        (self.font_size.1 * y) as f32,
-                    ))
-                    .into_iter()
-                {
-                    graphic_object.render(&mut self.canvas);
-                }
-            }
-        }
-        // cursor render
-        let ch = b'|';
-        for graphic_object in mray::fsd::fsd(char::from(ch))
-            .zoom(self.scaler as f32)
-            .shift(Point2f::from_floats(
-                (self.font_size.0 * self.cursor.0) as f32,
-                (self.font_size.1 * self.cursor.1) as f32,
-            ))
-            .into_iter()
-        {
-            graphic_object.render(&mut self.canvas);
-        }
-    }
-}
-
 fn start(pty: &PTY) {
+    // console is created before creating process
+    let mut console = Console::new((80, 24));
+
     match unistd::fork() {
         Ok(unistd::ForkResult::Parent { child: _, .. }) => {
             unistd::close(pty.slave).unwrap();
@@ -442,11 +120,9 @@ fn start(pty: &PTY) {
 
             let mut event_pump = sdl_context.event_pump().unwrap();
 
-            let mut console = Console::new((80, 24));
-
             'main_loop: loop {
                 // println!("wait...");
-                std::thread::sleep(std::time::Duration::new(0, 1_000_000u32));
+                std::thread::sleep(std::time::Duration::new(0, 10_000_000u32));
                 'readable_pts: loop {
                     let mut readable = nix::sys::select::FdSet::new();
                     readable.insert(pty.master);
@@ -562,9 +238,7 @@ fn start(pty: &PTY) {
                             if ctrl {
                                 if let Some(c) = ch.clone() {
                                     ch = match c[0] {
-                                        b'a'..=b'z' => {
-                                            Some(vec![c[0] - b'a' + 1])
-                                        },
+                                        b'a'..=b'z' => Some(vec![c[0] - b'a' + 1]),
                                         _ => Some(vec![c[0]]),
                                     }
                                 }
@@ -608,6 +282,10 @@ fn start(pty: &PTY) {
             use std::ffi::CString;
             let path = CString::new("/bin/bash").unwrap();
             unistd::execve(&path, &[], &[]).unwrap();
+
+            std::env::set_var("TERM", "xterm-mono");
+            std::env::set_var("COLUMNS", &console.get_size().0.to_string());
+            std::env::set_var("LINES", &console.get_size().1.to_string());
         }
         Err(_) => {}
     }
