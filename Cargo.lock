@@ -59,11 +59,12 @@ checksum = "99e85c08494b21a9054e7fe1374a732aeadaff3980b6990b94bfd3a70f690005"
 [[package]]
 name = "mray"
 version = "0.1.0"
-source = "git+https://github.com/asrcpq/mray#8910d0c2f9298052337eae67a1b406c75ffe8acf"
+source = "git+https://github.com/asrcpq/mray#087ee41f99a456498b8a04fa32ef92f7de433222"
 dependencies = [
  "derive_more",
  "dyn-clone",
  "lazy_static",
+ "sdl2",
 ]
 
 [[package]]
@@ -121,9 +122,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8e5aa70697bb26ee62214ae3288465ecec0000f05182f039b477001f08f5ae7"
+checksum = "dd1b5e337360b1fae433c59fcafa0c6b77c605e92540afa5221a7b81a9eca91d"
 dependencies = [
  "proc-macro2",
  "quote",

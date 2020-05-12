@@ -16,7 +16,6 @@ use sdl2::pixels::Color;
 
 use mray::algebra::Point2f;
 use mray::canvas::Canvas;
-use mray::graphic_object::GraphicObjects;
 
 fn set_shift(mut ch: u8, shift: bool) -> u8 {
     if !shift {
@@ -331,7 +330,7 @@ impl Console {
             for y in 0..self.size.1 {
                 let ch = self.buffer[(x + y * self.size.0) as usize];
                 for graphic_object in
-                    GraphicObjects::fsd(char::from(ch))
+                    mray::fsd::fsd(char::from(ch))
                         .zoom(self.scaler as f32)
                         .shift(Point2f::from_floats(
                             (self.font_size.0 * x) as f32,
@@ -346,7 +345,7 @@ impl Console {
         // cursor render
         let ch = b'|';
         for graphic_object in
-            GraphicObjects::fsd(char::from(ch))
+            mray::fsd::fsd(char::from(ch))
                 .zoom(self.scaler as f32)
                 .shift(Point2f::from_floats(
                     (self.font_size.0 * self.cursor.0) as f32,
