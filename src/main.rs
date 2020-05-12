@@ -281,11 +281,11 @@ fn start(pty: &PTY) {
 
             use std::ffi::CString;
             let path = CString::new("/bin/bash").unwrap();
-            unistd::execve(&path, &[], &[]).unwrap();
-
-            std::env::set_var("TERM", "xterm-mono");
+            std::env::set_var("TERM", "dumb");
             std::env::set_var("COLUMNS", &console.get_size().0.to_string());
             std::env::set_var("LINES", &console.get_size().1.to_string());
+
+            unistd::execv(&path, &[]).unwrap();
         }
         Err(_) => {}
     }
