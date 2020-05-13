@@ -202,6 +202,9 @@ impl Console {
             for y in 0..self.size.1 {
                 let ch = buffer[(x + y * self.size.0) as usize];
                 for graphic_object in mray::fsd::fsd(char::from(ch))
+                    .shift(Point2f::from_floats(-0.5, -0.5))
+                    .shear(-0.25)
+                    .shift(Point2f::from_floats(0.5, 0.5))
                     .zoom(self.scaler as f32)
                     .shift(Point2f::from_floats(
                         (self.font_size.0 * x) as f32,
