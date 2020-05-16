@@ -201,9 +201,9 @@ impl Console {
         for x in 0..self.size.0 {
             for y in 0..self.size.1 {
                 let ch = buffer[(x + y * self.size.0) as usize];
-                for graphic_object in mray::fsd::fsd(char::from(ch))
+                for mut graphic_object in mray::fsd::fsd(char::from(ch))
                     .shift(Point2f::from_floats(-0.5, -0.5))
-                    .shear(-0.25)
+                    .shear(-0.2)
                     .shift(Point2f::from_floats(0.5, 0.5))
                     .zoom(self.scaler as f32)
                     .shift(Point2f::from_floats(
@@ -212,13 +212,17 @@ impl Console {
                     ))
                     .into_iter()
                 {
+                    graphic_object.set_color(vec![
+                        1., 0.6, 0., 1.,
+                        1., 0.6, 0., 0.5,
+                    ]);
                     graphic_object.render(&mut self.canvas);
                 }
             }
         }
         // cursor render
         let ch = b'|';
-        for graphic_object in mray::fsd::fsd(char::from(ch))
+        for mut graphic_object in mray::fsd::fsd(char::from(ch))
             .zoom(self.scaler as f32)
             .shift(Point2f::from_floats(
                 (self.font_size.0 * cursor.0) as f32,
@@ -226,6 +230,7 @@ impl Console {
             ))
             .into_iter()
         {
+            graphic_object.set_color(vec![1.; 8]);
             graphic_object.render(&mut self.canvas);
         }
     }
