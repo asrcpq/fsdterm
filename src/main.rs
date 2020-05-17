@@ -237,19 +237,33 @@ fn start(pty: &PTY) {
                                 _ => None,
                             };
 
+                            ch = match ch {
+                                None => None,
+                                Some(mut ch) => {
+                                    Some(ch
+                                        .iter_mut()
+                                        .map(|x| set_shift(*x, shift))
+                                        .collect()
+                                    )
+                                },
+                            };
+
                             if ctrl {
                                 if let Some(c) = ch.clone() {
                                     ch = match c[0] {
                                         b'a'..=b'z' => Some(vec![c[0] - b'a' + 1]),
+                                        b'[' => Some(vec![27]),
+                                        b'\\' => Some(vec![28]),
+                                        b']' => Some(vec![29]),
+                                        b'^' => Some(vec![30]),
+                                        b'_' => Some(vec![31]),
                                         _ => Some(vec![c[0]]),
                                     }
                                 }
                             }
                             if let Some(ch) = ch {
-                                for c in ch.iter() {
-                                    nix::unistd::write(pty.master, &[set_shift(*c, shift); 1])
+                                    nix::unistd::write(pty.master, &ch)
                                         .unwrap();
-                                }
                             }
                         }
                         Event::KeyUp { keycode: code, .. } => {
