@@ -59,7 +59,7 @@ checksum = "3baa92041a6fec78c687fa0cc2b3fae8884f743d672cf551bed1d6dac6988d0f"
 [[package]]
 name = "mray"
 version = "0.1.0"
-source = "git+https://github.com/asrcpq/mray#cbe37e0858d8fd0af6ec4895234c1fdc7bb220a8"
+source = "git+https://github.com/asrcpq/mray#18dc96e5c0b442538a5797b6f564472ec947411d"
 dependencies = [
  "derive_more",
  "dyn-clone",

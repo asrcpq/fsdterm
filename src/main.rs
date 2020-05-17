@@ -240,12 +240,8 @@ fn start(pty: &PTY) {
                             ch = match ch {
                                 None => None,
                                 Some(mut ch) => {
-                                    Some(ch
-                                        .iter_mut()
-                                        .map(|x| set_shift(*x, shift))
-                                        .collect()
-                                    )
-                                },
+                                    Some(ch.iter_mut().map(|x| set_shift(*x, shift)).collect())
+                                }
                             };
 
                             if ctrl {
@@ -262,8 +258,7 @@ fn start(pty: &PTY) {
                                 }
                             }
                             if let Some(ch) = ch {
-                                    nix::unistd::write(pty.master, &ch)
-                                        .unwrap();
+                                nix::unistd::write(pty.master, &ch).unwrap();
                             }
                         }
                         Event::KeyUp { keycode: code, .. } => {
